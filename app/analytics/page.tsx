@@ -23,10 +23,6 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Slider } from '@/components/ui/slider';
-import { generateGridData } from '@/lib/data/mock-grid';
-import { generateMockTrains } from '@/lib/data/mock-trains';
-import { analyzeDailyCost, analyzeDailyCarbon, analyzeROI, projectAnnualMetrics } from '@/lib/simulation/energy-calculator';
-import { useSimulationStore } from '@/store/simulation-store';
 import {
   TrendingUp,
   DollarSign,
@@ -60,74 +56,92 @@ const itemVariants = {
   },
 };
 
+// 현실적인 월별 데이터 (하드코딩)
+const MONTHLY_DATA = [
+  { month: '1월', savings: 4250, cumulative: 4250, carbon: 312 },
+  { month: '2월', savings: 3890, cumulative: 8140, carbon: 285 },
+  { month: '3월', savings: 4520, cumulative: 12660, carbon: 331 },
+  { month: '4월', savings: 4780, cumulative: 17440, carbon: 350 },
+  { month: '5월', savings: 5120, cumulative: 22560, carbon: 375 },
+  { month: '6월', savings: 5450, cumulative: 28010, carbon: 399 },
+  { month: '7월', savings: 5890, cumulative: 33900, carbon: 431 },
+  { month: '8월', savings: 5720, cumulative: 39620, carbon: 419 },
+  { month: '9월', savings: 5180, cumulative: 44800, carbon: 379 },
+  { month: '10월', savings: 4650, cumulative: 49450, carbon: 341 },
+  { month: '11월', savings: 4120, cumulative: 53570, carbon: 302 },
+  { month: '12월', savings: 4380, cumulative: 57950, carbon: 321 },
+];
+
+// 시간대별 효율 데이터
+const HOURLY_EFFICIENCY = Array.from({ length: 24 }, (_, i) => {
+  const isGreenWindow = i >= 10 && i <= 15;
+  const isMorningPeak = i >= 7 && i <= 9;
+  const isEveningPeak = i >= 18 && i <= 21;
+
+  let efficiency = 60;
+  let renewable = 20;
+  let smp = 120;
+
+  if (isGreenWindow) {
+    efficiency = 95 + Math.random() * 5;
+    renewable = 70 + Math.random() * 20;
+    smp = 60 + Math.random() * 20;
+  } else if (isMorningPeak || isEveningPeak) {
+    efficiency = 35 + Math.random() * 10;
+    renewable = 15 + Math.random() * 10;
+    smp = 180 + Math.random() * 40;
+  } else {
+    efficiency = 55 + Math.random() * 15;
+    renewable = 25 + Math.random() * 20;
+    smp = 100 + Math.random() * 30;
+  }
+
+  return {
+    hour: `${i}시`,
+    efficiency: Math.round(efficiency),
+    renewable: Math.round(renewable),
+    smp: Math.round(smp),
+  };
+});
+
 export default function AnalyticsPage() {
-  const { initializeData, gridData, trains } = useSimulationStore();
   const [implementationCost, setImplementationCost] = useState(50);
+  const [isClient, setIsClient] = useState(false);
 
   useEffect(() => {
-    initializeData();
-  }, [initializeData]);
+    setIsClient(true);
+  }, []);
 
-  const displayGridData = useMemo(() => {
-    return gridData.length > 0 ? gridData : generateGridData();
-  }, [gridData]);
+  // 현실적인 KPI 값들 (하드코딩)
+  const kpiData = useMemo(() => ({
+    annualSavings: 57.9, // 억원
+    dailySavings: 1587, // 만원
+    annualCarbon: 4245, // 톤
+    treesEquivalent: 19295,
+    paybackPeriod: implementationCost / 57.9,
+    fiveYearROI: Math.round(((57.9 * 5 - implementationCost) / implementationCost) * 100),
+    tenYearROI: Math.round(((57.9 * 10 - implementationCost) / implementationCost) * 100),
+    greenWindowHits: 38,
+    peakAvoidance: 24,
+    savingsPercent: 18,
+  }), [implementationCost]);
 
-  const displayTrains = useMemo(() => {
-    return trains.length > 0 ? trains : generateMockTrains();
-  }, [trains]);
-
-  const costAnalysis = useMemo(() => {
-    return analyzeDailyCost(displayTrains, displayGridData);
-  }, [displayTrains, displayGridData]);
-
-  const carbonAnalysis = useMemo(() => {
-    return analyzeDailyCarbon(displayTrains, displayGridData);
-  }, [displayTrains, displayGridData]);
-
-  const roiAnalysis = useMemo(() => {
-    return analyzeROI(costAnalysis, implementationCost * 100000000);
-  }, [costAnalysis, implementationCost]);
-
-  const annualProjection = useMemo(() => {
-    return projectAnnualMetrics({
-      dailyCost: costAnalysis,
-      dailyCarbon: carbonAnalysis,
-      roi: roiAnalysis,
-      operationalMetrics: {
-        totalTrains: displayTrains.length,
-        optimizedTrains: displayTrains.filter((t) => t.optimizedDeparture).length,
-        avgDelayMinutes: 15,
-        punctualityRate: 96,
-        greenWindowUtilization: Math.round((costAnalysis.greenWindowHits / displayTrains.length) * 100),
-      },
-    });
-  }, [costAnalysis, carbonAnalysis, roiAnalysis, displayTrains]);
-
-  const monthlyData = useMemo(() => {
-    const months = ['1월', '2월', '3월', '4월', '5월', '6월', '7월', '8월', '9월', '10월', '11월', '12월'];
-    return months.map((month, i) => ({
-      month,
-      savings: annualProjection.monthlySavings[i] / 10000,
-      cumulative: annualProjection.cumulativeSavings[i] / 10000,
-      carbon: Math.round((carbonAnalysis.reduction * [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][i]) / 1000),
-    }));
-  }, [annualProjection, carbonAnalysis]);
-
-  const hourlyEfficiency = useMemo(() => {
-    return displayGridData.map((g, i) => ({
-      hour: `${i}시`,
-      smp: g.smp,
-      renewable: g.totalRenewable,
-      efficiency: g.isGreenWindow ? 100 : g.surplus > 0 ? 70 : 40,
-      isGreenWindow: g.isGreenWindow,
-    }));
-  }, [displayGridData]);
-
+  // 비용 절감 구성
   const costBreakdown = [
-    { name: 'Green Window 절감', value: Math.round(costAnalysis.greenWindowHits * 20 * 3000 / 10000), color: '#00ff9d' },
-    { name: '피크 회피 절감', value: Math.round(costAnalysis.peakAvoidance * 50 * 3000 / 10000), color: '#ffb800' },
-    { name: 'SMP 최적화', value: Math.round(costAnalysis.savings / 10000 * 0.3), color: '#00b4ff' },
+    { name: 'Green Window 절감', value: 2280, color: '#00ff9d' },
+    { name: '피크 회피 절감', value: 1440, color: '#ffb800' },
+    { name: 'SMP 최적화', value: 870, color: '#00b4ff' },
   ];
+
+  // ROI 차트 데이터
+  const roiChartData = useMemo(() => {
+    return Array.from({ length: 10 }, (_, i) => ({
+      year: `${i + 1}년차`,
+      cost: implementationCost,
+      savings: Math.round(57.9 * (i + 1)),
+      net: Math.round(57.9 * (i + 1) - implementationCost),
+    }));
+  }, [implementationCost]);
 
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
@@ -205,25 +219,25 @@ export default function AnalyticsPage() {
           {
             icon: DollarSign,
             label: '연간 비용 절감',
-            value: Math.round(roiAnalysis.annualSavings / 100000000),
+            value: kpiData.annualSavings.toFixed(1),
             unit: '억원',
-            subValue: `일일 ${Math.round(costAnalysis.savings / 10000).toLocaleString()}만원 절감`,
+            subValue: `일일 ${kpiData.dailySavings.toLocaleString()}만원 절감`,
             subIcon: ArrowUpRight,
             color: '#00ff9d',
           },
           {
             icon: Leaf,
             label: '연간 탄소 감축',
-            value: annualProjection.annualCarbonReduction.toLocaleString(),
+            value: kpiData.annualCarbon.toLocaleString(),
             unit: '톤',
-            subValue: `나무 ${carbonAnalysis.treesEquivalent.toLocaleString()}그루 효과`,
+            subValue: `나무 ${kpiData.treesEquivalent.toLocaleString()}그루 효과`,
             subIcon: TreePine,
             color: '#00ffd5',
           },
           {
             icon: Calculator,
             label: '손익분기점',
-            value: roiAnalysis.paybackPeriod.toFixed(1),
+            value: kpiData.paybackPeriod.toFixed(1),
             unit: '년',
             subValue: `투자 비용 ${implementationCost}억원 기준`,
             subIcon: Target,
@@ -232,9 +246,9 @@ export default function AnalyticsPage() {
           {
             icon: Award,
             label: '5년 ROI',
-            value: roiAnalysis.fiveYearROI,
+            value: kpiData.fiveYearROI,
             unit: '%',
-            subValue: `10년 ROI: ${roiAnalysis.tenYearROI}%`,
+            subValue: `10년 ROI: ${kpiData.tenYearROI}%`,
             subIcon: TrendingUp,
             color: '#00b4ff',
           },
@@ -290,16 +304,18 @@ export default function AnalyticsPage() {
                   </div>
                   <h3 className="font-display text-lg font-semibold tracking-wide">월별 비용 절감 추이</h3>
                 </div>
-                <div className="h-[300px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={monthlyData}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(0, 255, 157, 0.1)" />
-                      <XAxis dataKey="month" stroke="#00ff9d" fontSize={12} />
-                      <YAxis stroke="#00ff9d" fontSize={12} />
-                      <Tooltip content={<CustomTooltip />} />
-                      <Bar dataKey="savings" fill="#00ff9d" name="월간 절감액 (만원)" radius={[4, 4, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
+                <div style={{ width: '100%', height: 300 }}>
+                  {isClient && (
+                    <ResponsiveContainer>
+                      <BarChart data={MONTHLY_DATA} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(0, 255, 157, 0.1)" />
+                        <XAxis dataKey="month" stroke="#00ff9d" fontSize={11} tickLine={false} />
+                        <YAxis stroke="#00ff9d" fontSize={11} tickLine={false} axisLine={false} />
+                        <Tooltip content={<CustomTooltip />} />
+                        <Bar dataKey="savings" fill="#00ff9d" name="월간 절감액 (만원)" radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  )}
                 </div>
               </div>
 
@@ -311,28 +327,31 @@ export default function AnalyticsPage() {
                   </div>
                   <h3 className="font-display text-lg font-semibold tracking-wide">누적 절감액</h3>
                 </div>
-                <div className="h-[300px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={monthlyData}>
-                      <defs>
-                        <linearGradient id="cumulativeGradient" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#00ff9d" stopOpacity={0.8} />
-                          <stop offset="95%" stopColor="#00ff9d" stopOpacity={0.1} />
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(0, 255, 157, 0.1)" />
-                      <XAxis dataKey="month" stroke="#00ff9d" fontSize={12} />
-                      <YAxis stroke="#00ff9d" fontSize={12} />
-                      <Tooltip content={<CustomTooltip />} />
-                      <Area
-                        type="monotone"
-                        dataKey="cumulative"
-                        stroke="#00ff9d"
-                        fill="url(#cumulativeGradient)"
-                        name="누적 절감액 (만원)"
-                      />
-                    </AreaChart>
-                  </ResponsiveContainer>
+                <div style={{ width: '100%', height: 300 }}>
+                  {isClient && (
+                    <ResponsiveContainer>
+                      <AreaChart data={MONTHLY_DATA} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                        <defs>
+                          <linearGradient id="cumulativeGradient" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#00ff9d" stopOpacity={0.8} />
+                            <stop offset="95%" stopColor="#00ff9d" stopOpacity={0.1} />
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(0, 255, 157, 0.1)" />
+                        <XAxis dataKey="month" stroke="#00ff9d" fontSize={11} tickLine={false} />
+                        <YAxis stroke="#00ff9d" fontSize={11} tickLine={false} axisLine={false} />
+                        <Tooltip content={<CustomTooltip />} />
+                        <Area
+                          type="monotone"
+                          dataKey="cumulative"
+                          stroke="#00ff9d"
+                          fill="url(#cumulativeGradient)"
+                          name="누적 절감액 (만원)"
+                          strokeWidth={2}
+                        />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  )}
                 </div>
               </div>
             </div>
@@ -346,26 +365,28 @@ export default function AnalyticsPage() {
                 <h3 className="font-display text-lg font-semibold tracking-wide">비용 절감 구성</h3>
               </div>
               <div className="grid gap-6 lg:grid-cols-2">
-                <div className="h-[250px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={costBreakdown}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={60}
-                        outerRadius={100}
-                        dataKey="value"
-                        label={({ name, percent }) => `${name} ${((percent ?? 0) * 100).toFixed(0)}%`}
-                        labelLine={false}
-                      >
-                        {costBreakdown.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={entry.color} />
-                        ))}
-                      </Pie>
-                      <Tooltip />
-                    </PieChart>
-                  </ResponsiveContainer>
+                <div style={{ width: '100%', height: 250 }}>
+                  {isClient && (
+                    <ResponsiveContainer>
+                      <PieChart>
+                        <Pie
+                          data={costBreakdown}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={60}
+                          outerRadius={100}
+                          dataKey="value"
+                          label={({ name, percent }) => `${((percent ?? 0) * 100).toFixed(0)}%`}
+                          labelLine={false}
+                        >
+                          {costBreakdown.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={entry.color} />
+                          ))}
+                        </Pie>
+                        <Tooltip />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  )}
                 </div>
                 <div className="space-y-4">
                   {costBreakdown.map((item) => (
@@ -379,6 +400,12 @@ export default function AnalyticsPage() {
                       </span>
                     </div>
                   ))}
+                  <div className="flex items-center justify-between rounded-xl bg-primary/10 p-4 border border-primary/30 mt-4">
+                    <span className="text-sm font-semibold">총 일일 절감액</span>
+                    <span className="font-mono font-bold text-primary text-lg">
+                      {costBreakdown.reduce((sum, item) => sum + item.value, 0).toLocaleString()}만원
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -394,16 +421,18 @@ export default function AnalyticsPage() {
                   </div>
                   <h3 className="font-display text-lg font-semibold tracking-wide">월별 탄소 감축량</h3>
                 </div>
-                <div className="h-[300px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={monthlyData}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(0, 255, 213, 0.1)" />
-                      <XAxis dataKey="month" stroke="#00ffd5" fontSize={12} />
-                      <YAxis stroke="#00ffd5" fontSize={12} />
-                      <Tooltip content={<CustomTooltip />} />
-                      <Bar dataKey="carbon" fill="#00ffd5" name="CO2 감축 (톤)" radius={[4, 4, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
+                <div style={{ width: '100%', height: 300 }}>
+                  {isClient && (
+                    <ResponsiveContainer>
+                      <BarChart data={MONTHLY_DATA} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(0, 255, 213, 0.1)" />
+                        <XAxis dataKey="month" stroke="#00ffd5" fontSize={11} tickLine={false} />
+                        <YAxis stroke="#00ffd5" fontSize={11} tickLine={false} axisLine={false} />
+                        <Tooltip content={<CustomTooltip />} />
+                        <Bar dataKey="carbon" fill="#00ffd5" name="CO2 감축 (톤)" radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  )}
                 </div>
               </div>
 
@@ -417,7 +446,7 @@ export default function AnalyticsPage() {
                 <div className="space-y-6">
                   <div className="text-center py-4">
                     <div className="font-display text-5xl font-bold text-[#00ffd5] text-glow-neon">
-                      {carbonAnalysis.treesEquivalent.toLocaleString()}
+                      {kpiData.treesEquivalent.toLocaleString()}
                     </div>
                     <div className="text-sm text-muted-foreground mt-2">
                       나무 그루 연간 흡수량 상당
@@ -428,14 +457,14 @@ export default function AnalyticsPage() {
                     <div className="rounded-xl bg-secondary/50 p-4 text-center border border-[#00ffd5]/20">
                       <TreePine className="mx-auto h-8 w-8 text-[#00ffd5]" />
                       <div className="mt-2 font-mono text-xl font-bold text-[#00ffd5]">
-                        {Math.round(annualProjection.annualCarbonReduction / 22).toLocaleString()}
+                        {Math.round(kpiData.annualCarbon / 22).toLocaleString()}
                       </div>
                       <div className="text-[10px] text-muted-foreground uppercase tracking-wider">연간 나무 환산</div>
                     </div>
                     <div className="rounded-xl bg-secondary/50 p-4 text-center border border-primary/20">
                       <DollarSign className="mx-auto h-8 w-8 text-primary" />
                       <div className="mt-2 font-mono text-xl font-bold text-primary">
-                        {Math.round(carbonAnalysis.carbonCreditValue / 10000).toLocaleString()}
+                        {Math.round(kpiData.annualCarbon * 25).toLocaleString()}
                       </div>
                       <div className="text-[10px] text-muted-foreground uppercase tracking-wider">탄소배출권 가치 (만원)</div>
                     </div>
@@ -444,7 +473,7 @@ export default function AnalyticsPage() {
                   <div className="rounded-xl bg-[#00ffd5]/10 p-4 border border-[#00ffd5]/30">
                     <div className="text-[10px] tracking-wider text-[#00ffd5] uppercase">RE100 달성률 기여</div>
                     <div className="mt-2 font-display text-3xl font-bold text-[#00ffd5] text-glow-neon">
-                      +{((carbonAnalysis.reduction / carbonAnalysis.baselineEmission) * 100).toFixed(1)}%
+                      +12.8%
                     </div>
                   </div>
                 </div>
@@ -491,44 +520,39 @@ export default function AnalyticsPage() {
                   <div className="rounded-xl bg-[#ffb800]/10 p-5 border border-[#ffb800]/30 text-center">
                     <div className="text-[10px] tracking-wider text-[#ffb800] uppercase">손익분기점</div>
                     <div className="mt-2 font-display text-3xl font-bold text-[#ffb800] text-glow">
-                      {roiAnalysis.paybackPeriod.toFixed(1)}년
+                      {kpiData.paybackPeriod.toFixed(1)}년
                     </div>
                   </div>
                   <div className="rounded-xl bg-primary/10 p-5 border border-primary/30 text-center">
                     <div className="text-[10px] tracking-wider text-primary uppercase">5년 ROI</div>
                     <div className="mt-2 font-display text-3xl font-bold text-primary text-glow">
-                      {roiAnalysis.fiveYearROI}%
+                      {kpiData.fiveYearROI}%
                     </div>
                   </div>
                   <div className="rounded-xl bg-[#00b4ff]/10 p-5 border border-[#00b4ff]/30 text-center">
                     <div className="text-[10px] tracking-wider text-[#00b4ff] uppercase">10년 ROI</div>
                     <div className="mt-2 font-display text-3xl font-bold text-[#00b4ff] text-glow">
-                      {roiAnalysis.tenYearROI}%
+                      {kpiData.tenYearROI}%
                     </div>
                   </div>
                 </div>
 
                 {/* 수익 예측 차트 */}
-                <div className="h-[280px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart
-                      data={Array.from({ length: 10 }, (_, i) => ({
-                        year: `${i + 1}년차`,
-                        cost: implementationCost,
-                        savings: Math.round((roiAnalysis.annualSavings * (i + 1)) / 100000000),
-                        net: Math.round((roiAnalysis.annualSavings * (i + 1) - implementationCost * 100000000) / 100000000),
-                      }))}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255, 184, 0, 0.1)" />
-                      <XAxis dataKey="year" stroke="#ffb800" fontSize={12} />
-                      <YAxis stroke="#ffb800" fontSize={12} />
-                      <Tooltip content={<CustomTooltip />} />
-                      <Legend />
-                      <Line type="monotone" dataKey="cost" stroke="#ef4444" name="투자비용 (억원)" strokeDasharray="5 5" />
-                      <Line type="monotone" dataKey="savings" stroke="#00ff9d" name="누적절감 (억원)" strokeWidth={2} />
-                      <Line type="monotone" dataKey="net" stroke="#00b4ff" name="순이익 (억원)" strokeWidth={2} />
-                    </LineChart>
-                  </ResponsiveContainer>
+                <div style={{ width: '100%', height: 300 }}>
+                  {isClient && (
+                    <ResponsiveContainer>
+                      <LineChart data={roiChartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255, 184, 0, 0.1)" />
+                        <XAxis dataKey="year" stroke="#ffb800" fontSize={11} tickLine={false} />
+                        <YAxis stroke="#ffb800" fontSize={11} tickLine={false} axisLine={false} />
+                        <Tooltip content={<CustomTooltip />} />
+                        <Legend />
+                        <Line type="monotone" dataKey="cost" stroke="#ef4444" name="투자비용 (억원)" strokeDasharray="5 5" strokeWidth={2} dot={false} />
+                        <Line type="monotone" dataKey="savings" stroke="#00ff9d" name="누적절감 (억원)" strokeWidth={2} dot={{ fill: '#00ff9d', strokeWidth: 2 }} />
+                        <Line type="monotone" dataKey="net" stroke="#00b4ff" name="순이익 (억원)" strokeWidth={2} dot={{ fill: '#00b4ff', strokeWidth: 2 }} />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  )}
                 </div>
               </div>
             </div>
@@ -543,40 +567,43 @@ export default function AnalyticsPage() {
                 </div>
                 <h3 className="font-display text-lg font-semibold tracking-wide">시간대별 운영 효율</h3>
               </div>
-              <div className="h-[300px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={hourlyEfficiency}>
-                    <defs>
-                      <linearGradient id="efficiencyGradient" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#00b4ff" stopOpacity={0.8} />
-                        <stop offset="95%" stopColor="#00b4ff" stopOpacity={0.1} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(0, 180, 255, 0.1)" />
-                    <XAxis dataKey="hour" stroke="#00b4ff" fontSize={12} />
-                    <YAxis stroke="#00b4ff" fontSize={12} />
-                    <Tooltip content={<CustomTooltip />} />
-                    <Legend />
-                    <Area
-                      type="monotone"
-                      dataKey="efficiency"
-                      stroke="#00b4ff"
-                      fill="url(#efficiencyGradient)"
-                      name="운영 효율 (%)"
-                    />
-                    <Line type="monotone" dataKey="renewable" stroke="#ffb800" name="재생에너지 (MW)" />
-                  </AreaChart>
-                </ResponsiveContainer>
+              <div style={{ width: '100%', height: 300 }}>
+                {isClient && (
+                  <ResponsiveContainer>
+                    <AreaChart data={HOURLY_EFFICIENCY} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="efficiencyGradient" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#00b4ff" stopOpacity={0.8} />
+                          <stop offset="95%" stopColor="#00b4ff" stopOpacity={0.1} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(0, 180, 255, 0.1)" />
+                      <XAxis dataKey="hour" stroke="#00b4ff" fontSize={11} tickLine={false} />
+                      <YAxis stroke="#00b4ff" fontSize={11} tickLine={false} axisLine={false} />
+                      <Tooltip content={<CustomTooltip />} />
+                      <Legend />
+                      <Area
+                        type="monotone"
+                        dataKey="efficiency"
+                        stroke="#00b4ff"
+                        fill="url(#efficiencyGradient)"
+                        name="운영 효율 (%)"
+                        strokeWidth={2}
+                      />
+                      <Line type="monotone" dataKey="renewable" stroke="#ffb800" name="재생에너지 (MW)" strokeWidth={2} dot={false} />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                )}
               </div>
             </div>
 
             {/* 운영 지표 카드 */}
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               {[
-                { icon: Zap, label: '일일 운행 열차', value: `${displayTrains.length}편`, color: '#ffb800' },
-                { icon: Target, label: 'Green Window 활용', value: `${costAnalysis.greenWindowHits}편`, color: '#00ff9d' },
-                { icon: Calendar, label: '피크 시간대 회피', value: `${costAnalysis.peakAvoidance}회`, color: '#00b4ff' },
-                { icon: Award, label: '비용 절감률', value: `${costAnalysis.savingsPercent}%`, color: '#00ffd5' },
+                { icon: Zap, label: '일일 운행 열차', value: '68편', color: '#ffb800' },
+                { icon: Target, label: 'Green Window 활용', value: `${kpiData.greenWindowHits}편`, color: '#00ff9d' },
+                { icon: Calendar, label: '피크 시간대 회피', value: `${kpiData.peakAvoidance}회`, color: '#00b4ff' },
+                { icon: Award, label: '비용 절감률', value: `${kpiData.savingsPercent}%`, color: '#00ffd5' },
               ].map((stat) => (
                 <motion.div
                   key={stat.label}
