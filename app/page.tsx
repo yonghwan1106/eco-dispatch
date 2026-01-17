@@ -17,6 +17,7 @@ import {
   Activity,
   ArrowRight,
   Hexagon,
+  Award,
 } from 'lucide-react';
 
 const containerVariants = {
@@ -122,6 +123,20 @@ export default function DashboardPage() {
 
           <div className="relative flex items-center justify-between">
             <div className="max-w-2xl">
+              {/* 공모전 뱃지 */}
+              <motion.div
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: 0.2, duration: 0.5 }}
+                className="inline-flex items-center gap-2 px-4 py-2 mb-4 rounded-full bg-gradient-to-r from-[#ffb800]/20 via-[#00ff9d]/20 to-[#00b4ff]/20 border border-[#ffb800]/40 backdrop-blur-sm"
+              >
+                <Award className="h-4 w-4 text-[#ffb800]" />
+                <span className="text-xs font-display font-semibold tracking-wide text-[#ffb800]">
+                  2026 그린레일 챌린지 공모전
+                </span>
+                <div className="w-1.5 h-1.5 rounded-full bg-[#00ff9d] animate-pulse" />
+              </motion.div>
+
               <div className="flex items-center gap-3 mb-4">
                 <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/20 border border-primary/30">
                   <Hexagon className="h-5 w-5 text-primary" />
