@@ -134,6 +134,9 @@ export default function DashboardPage() {
                 <span className="text-xs font-display font-semibold tracking-wide text-[#ffb800]">
                   2026 그린레일 챌린지 공모전
                 </span>
+                <span className="px-2 py-0.5 text-[10px] font-display font-bold tracking-wider bg-[#ffb800] text-black rounded">
+                  출품작
+                </span>
                 <div className="w-1.5 h-1.5 rounded-full bg-[#00ff9d] animate-pulse" />
               </motion.div>
 
