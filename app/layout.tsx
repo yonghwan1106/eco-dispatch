@@ -1,18 +1,7 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Header } from "@/components/layout/Header";
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
 
 export const metadata: Metadata = {
   title: "Eco-Dispatch | 신재생 에너지 연계형 지능형 열차 스케줄링",
@@ -27,13 +16,11 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ko" className="dark">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
+      <body className="font-body antialiased noise-overlay">
         <Sidebar />
-        <div className="ml-64 min-h-screen">
+        <div className="ml-72 min-h-screen">
           <Header />
-          <main className="p-6">
+          <main className="p-6 hex-grid">
             {children}
           </main>
         </div>
